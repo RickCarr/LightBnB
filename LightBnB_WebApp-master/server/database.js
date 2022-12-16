@@ -16,18 +16,24 @@ const pool = new Pool({
  * @param {String} email The email of the user.
  * @return {Promise<{}>} A promise to the user.
  */
-const getUserWithEmail = function(email) {
-  let user;
-  for (const userId in users) {
-    user = users[userId];
-    if (user.email.toLowerCase() === email.toLowerCase()) {
-      break;
-    } else {
-      user = null;
-    }
-  }
-  return Promise.resolve(user);
-}
+
+const getUserWithEmail = (email) => {
+  const value = [`${email}`];
+  const noHaxQuery = `
+    SELECT * 
+    FROM users 
+    WHERE email = $1
+    `;
+  return pool
+    .query(noHaxQuery, value)
+    .then((result) => {
+      return result.rows[0];
+    })
+    .catch((err) => {
+      console.log(err.message);
+    });
+};
+
 exports.getUserWithEmail = getUserWithEmail;
 
 /**
@@ -35,9 +41,22 @@ exports.getUserWithEmail = getUserWithEmail;
  * @param {string} id The id of the user.
  * @return {Promise<{}>} A promise to the user.
  */
-const getUserWithId = function(id) {
-  return Promise.resolve(users[id]);
-}
+const getUserWithId = (id) => {
+  const value = [`${id}`];
+  const noHaxQuery =`
+  SELECT * 
+    FROM users 
+    WHERE id = $1
+    `;
+  return pool
+    .query(noHaxQuery, value)
+    .then((result) => {
+      return result.rows[0];
+    })
+    .catch((err) => {
+      console.log(err.message);
+    });
+};
 exports.getUserWithId = getUserWithId;
 
 
@@ -46,12 +65,23 @@ exports.getUserWithId = getUserWithId;
  * @param {{name: string, password: string, email: string}} user
  * @return {Promise<{}>} A promise to the user.
  */
-const addUser =  function(user) {
-  const userId = Object.keys(users).length + 1;
-  user.id = userId;
-  users[userId] = user;
-  return Promise.resolve(user);
-}
+const addUser = (user) => {  
+  const value = [`${user.name}`, `${user.email}`, `${user.password}`];
+  const noHaxQuery =`
+  INSERT INTO users (name, email, password)
+  VALUES ($1, $2, $3)
+  RETURNING *
+    `;
+  return pool
+    .query(noHaxQuery, value)
+    .then((result) => {      
+      return result.rows[0];
+    })
+    .catch((err) => {
+      console.log(err.message);
+    });
+};
+
 exports.addUser = addUser;
 
 /// Reservations
@@ -61,9 +91,30 @@ exports.addUser = addUser;
  * @param {string} guest_id The id of the user.
  * @return {Promise<[{}]>} A promise to the reservations.
  */
-const getAllReservations = function(guest_id, limit = 10) {
-  return getAllProperties(null, 2);
-}
+
+const getAllReservations = (guest_id, limit = 10) => {
+  const values = [`${guest_id}`,limit];
+  const noHaxQuery = `
+    SELECT reservations.id, properties.title, cost_per_night, start_date, AVG(property_reviews.rating) AS average_rating
+    FROM reservations
+    JOIN properties ON property_id = properties.id
+    JOIN property_reviews ON properties.id = property_reviews.property_id
+    WHERE reservations.guest_id = $1
+    GROUP BY properties.id, reservations.id
+    ORDER BY start_date
+    FETCH FIRST $2 ROWS ONLY;
+    `;
+  return pool
+    .query(noHaxQuery, values)
+    .then((result) => {
+      return result.rows;
+    })
+    .catch((err) => {
+      console.log(err.message);
+    });
+  };
+  //   function(guest_id, limit = 10) {
+  // return getAllProperties(null, 2);
 exports.getAllReservations = getAllReservations;
 
 /// Properties
@@ -76,10 +127,14 @@ exports.getAllReservations = getAllReservations;
  */
 
 const getAllProperties = (options, limit = 10) => {
-const values = [limit];
-const noHaxQuery = `SELECT * FROM properties FETCH FIRST $1 ROWS ONLY`;
-return pool
-  .query(noHaxQuery, values)
+  const values = [limit];
+  const noHaxQuery = `
+    SELECT * 
+    FROM properties 
+    FETCH FIRST $1 ROWS ONLY
+    `;
+  return pool
+    .query(noHaxQuery, values)
     .then((result) => {
       return result.rows;
     })
@@ -101,5 +156,5 @@ const addProperty = function(property) {
   property.id = propertyId;
   properties[propertyId] = property;
   return Promise.resolve(property);
-}
+};
 exports.addProperty = addProperty;
