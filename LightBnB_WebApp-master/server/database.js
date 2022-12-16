@@ -43,7 +43,7 @@ exports.getUserWithEmail = getUserWithEmail;
  */
 const getUserWithId = (id) => {
   const value = [`${id}`];
-  const noHaxQuery =`
+  const noHaxQuery = `
   SELECT * 
     FROM users 
     WHERE id = $1
@@ -65,16 +65,16 @@ exports.getUserWithId = getUserWithId;
  * @param {{name: string, password: string, email: string}} user
  * @return {Promise<{}>} A promise to the user.
  */
-const addUser = (user) => {  
+const addUser = (user) => {
   const value = [`${user.name}`, `${user.email}`, `${user.password}`];
-  const noHaxQuery =`
+  const noHaxQuery = `
   INSERT INTO users (name, email, password)
   VALUES ($1, $2, $3)
   RETURNING *
     `;
   return pool
     .query(noHaxQuery, value)
-    .then((result) => {      
+    .then((result) => {
       return result.rows[0];
     })
     .catch((err) => {
@@ -93,7 +93,7 @@ exports.addUser = addUser;
  */
 
 const getAllReservations = (guest_id, limit = 10) => {
-  const values = [`${guest_id}`,limit];
+  const values = [`${guest_id}`, limit];
   const noHaxQuery = `
     SELECT reservations.id, properties.title, cost_per_night, start_date, AVG(property_reviews.rating) AS average_rating
     FROM reservations
@@ -112,9 +112,8 @@ const getAllReservations = (guest_id, limit = 10) => {
     .catch((err) => {
       console.log(err.message);
     });
-  };
-  //   function(guest_id, limit = 10) {
-  // return getAllProperties(null, 2);
+};
+
 exports.getAllReservations = getAllReservations;
 
 /// Properties
@@ -127,20 +126,52 @@ exports.getAllReservations = getAllReservations;
  */
 
 const getAllProperties = (options, limit = 10) => {
-  const values = [limit];
-  const noHaxQuery = `
-    SELECT * 
-    FROM properties 
-    FETCH FIRST $1 ROWS ONLY
+  const values = [limit];  
+  let noHaxQuery = `    
+  SELECT properties.*, AVG(property_reviews.rating) as average_rating
+  FROM properties
+  JOIN property_reviews ON property_id = properties.id
+  `;
+
+  if (options.city) {
+    values.push(`%${options.city}%`);
+    noHaxQuery += `WHERE city LIKE $${values.length} `;
+  };
+
+  if (options.owner_id) {
+    values.push(`${options.owner_id}`);
+    noHaxQuery += `AND owner_id = $${values.length} `;
+  };
+
+  if (options.minimum_price_per_night) {
+    values.push(`${options.minimum_price_per_night}`);
+    noHaxQuery += `AND cost_per_night >= $${values.length} `;
+  };
+
+  if (options.maximum_price_per_night) {
+    values.push(100 * `${options.maximum_price_per_night}`);
+    noHaxQuery += `AND cost_per_night <= $${values.length} `;
+  };
+  
+  noHaxQuery += `GROUP BY properties.id `;
+  if (options.minimum_rating) {
+      values.push(`${options.minimum_rating}`);
+      noHaxQuery += `HAVING AVG(property_reviews.rating) >= $${values.length}`;
+    };
+
+    noHaxQuery +=`
+    ORDER BY cost_per_night
+    FETCH FIRST $1 ROWS ONLY;
     `;
+  console.log(noHaxQuery, values);
   return pool
-    .query(noHaxQuery, values)
-    .then((result) => {
-      return result.rows;
+  .query(noHaxQuery, values)
+  .then((result) => {
+    return result.rows;
     })
-    .catch((err) => {
-      console.log(err.message);
-    });
+  .catch((err) => {
+    console.log(err.message);
+  });
 };
 
 exports.getAllProperties = getAllProperties;
